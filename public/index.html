@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Edge SEO Toolkit</title>
+<meta name="description" content="Run an on-page SEO audit from Cloudflare's edge network in under a second, with AI-written title and meta description suggestions.">
+<link rel="canonical" href="/">
+<meta property="og:title" content="Edge SEO Toolkit by Zimtech Business Solutions">
+<meta property="og:description" content="On-page SEO audits at the edge with Cloudflare Workers and Workers AI.">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebApplication","name":"Edge SEO Toolkit","applicationCategory":"BusinessApplication","creator":{"@type":"Organization","name":"Zimtech Business Solutions"}}
+</script>
+<style>
+:root{--bg:#f6f4ef;--ink:#16181d;--muted:#5d636e;--line:#dcd8cf;--card:#fff;--accent:#e8590c;--pass:#2b8a3e;--warn:#c27c0e;--fail:#c92a2a}
+@media (prefers-color-scheme:dark){:root{--bg:#121316;--ink:#ecebe7;--muted:#9aa0aa;--line:#2a2d33;--card:#1a1c20;--accent:#ff7a33;--pass:#51cf66;--warn:#fcc419;--fail:#ff6b6b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:880px;margin:0 auto;padding:48px 16px 80px}
+.eyebrow{font:600 12px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+h1{font-size:clamp(32px,6vw,52px);line-height:1.05;letter-spacing:-.03em;margin:12px 0 12px}
+.lede{color:var(--muted);max-width:56ch;margin:0 0 32px}
+form{display:flex;gap:8px;flex-wrap:wrap}
+input[type=text]{flex:1 1 260px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font-size:16px}
+button{padding:14px 20px;border:0;border-radius:10px;background:var(--ink);color:var(--bg);font-weight:600;cursor:pointer;font-size:15px}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button:disabled{opacity:.5;cursor:wait}
+label.ai{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:14px;margin-top:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:24px;margin-top:24px}
+.head{display:flex;gap:24px;align-items:center;flex-wrap:wrap}
+.score{font:700 64px/1 ui-monospace,Menlo,monospace;letter-spacing:-.04em}
+.meta{color:var(--muted);font-size:14px;word-break:break-all}
+.checks{list-style:none;margin:20px 0 0;padding:0;display:grid;gap:1px;background:var(--line);border-radius:10px;overflow:hidden}
+.checks li{background:var(--card);padding:12px 14px;display:grid;grid-template-columns:14px 1fr auto;gap:12px;align-items:center}
+.dot{width:10px;height:10px;border-radius:50%}
+.pass .dot{background:var(--pass)}.warn .dot{background:var(--warn)}.fail .dot{background:var(--fail)}
+.detail{color:var(--muted);font-size:14px;text-align:right}
+h2{font-size:18px;margin:0 0 12px}
+.suggest p{margin:6px 0}.suggest code{font-size:14px}
+.err{color:var(--fail)}
+.watch li{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);word-break:break-all}
+.watch ul{list-style:none;padding:0;margin:0}
+.stack{display:flex;gap:8px;flex-wrap:wrap;margin-top:40px}
+.stack span{font:12px ui-monospace,Menlo,monospace;border:1px solid var(--line);border-radius:999px;padding:6px 10px;color:var(--muted)}
+footer{margin-top:40px;color:var(--muted);font-size:13px}
+@media (max-width:560px){.checks li{grid-template-columns:14px 1fr}.detail{grid-column:2;text-align:left}}
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Zimtech Business Solutions</div>
+  <h1>Edge SEO Toolkit</h1>
+  <p class="lede">Audit any page's on-page SEO from Cloudflare's global network. Fourteen checks, streamed HTML parsing, AI-written title and meta suggestions, and daily monitoring for the pages that matter.</p>
+
+  <form id="f">
+    <input type="text" id="u" placeholder="example.com/services" autocomplete="url" required aria-label="URL to audit">
+    <button id="go">Run audit</button>
+  </form>
+  <label class="ai"><input type="checkbox" id="ai" checked> Include Workers AI suggestions</label>
+
+  <div id="out"></div>
+
+  <section class="card watch">
+    <h2>Daily watchlist</h2>
+    <p class="meta">Re-audited every morning by a cron trigger. Score drops of 10+ points are logged as warnings.</p>
+    <ul id="wl"></ul>
+  </section>
+
+  <div class="stack">
+    <span>Workers</span><span>Static Assets</span><span>HTMLRewriter</span><span>Workers AI</span><span>KV</span><span>Cron Triggers</span><span>Smart Placement</span><span>Observability</span>
+  </div>
+  <footer>Open source · <a href="https://github.com/Zimtech-Business-Solutions/edge-seo-toolkit">View on GitHub</a></footer>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+let lastUrl = "";
+
+$("f").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const url = $("u").value.trim();
+  $("go").disabled = true; $("go").textContent = "Auditing…";
+  $("out").innerHTML = "";
+  try {
+    const r = await fetch(`/api/audit?url=${encodeURIComponent(url)}${$("ai").checked ? "&ai=1" : ""}`);
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Audit failed");
+    lastUrl = d.signals.url;
+    render(d);
+  } catch (err) {
+    $("out").innerHTML = `<div class="card err">${esc(err.message)}</div>`;
+  } finally {
+    $("go").disabled = false; $("go").textContent = "Run audit";
+  }
+});
+
+function render(d) {
+  const s = d.signals;
+  const color = d.score >= 85 ? "var(--pass)" : d.score >= 60 ? "var(--warn)" : "var(--fail)";
+  let html = `<section class="card">
+    <div class="head">
+      <div class="score" style="color:${color}">${d.score}</div>
+      <div><strong>${esc(s.title || "Untitled page")}</strong><div class="meta">${esc(s.finalUrl)} · ${(s.bytes / 1024).toFixed(0)} KB · ${s.ttfbMs} ms</div></div>
+      <button class="ghost" id="watch" style="margin-left:auto">Watch daily</button>
+    </div>
+    <ul class="checks">${d.checks.map((c) => `<li class="${c.status}"><span class="dot"></span><span>${esc(c.label)}</span><span class="detail">${esc(c.detail)}</span></li>`).join("")}</ul>
+  </section>`;
+  if (d.ai && !d.ai.error) {
+    html += `<section class="card suggest"><h2>AI suggestions</h2>
+      <p><strong>Title</strong> (${d.ai.title.length})<br><code>${esc(d.ai.title)}</code></p>
+      <p><strong>Meta description</strong> (${d.ai.metaDescription.length})<br><code>${esc(d.ai.metaDescription)}</code></p>
+      <p class="meta">${esc(d.ai.model)}</p></section>`;
+  } else if (d.ai?.error) {
+    html += `<section class="card meta">${esc(d.ai.error)}</section>`;
+  }
+  $("out").innerHTML = html;
+  $("watch").onclick = addWatch;
+}
+
+async function loadWatch() {
+  const r = await fetch("/api/watchlist");
+  const list = r.ok ? await r.json() : [];
+  $("wl").innerHTML = list.length
+    ? list.map((u) => `<li><span>${esc(u)}</span><button class="ghost" data-u="${esc(u)}">Remove</button></li>`).join("")
+    : `<li class="meta">Nothing watched yet. Run an audit and click "Watch daily".</li>`;
+  $("wl").querySelectorAll("button").forEach((b) => (b.onclick = () =>
+    write(`/api/watchlist?url=${encodeURIComponent(b.dataset.u)}`, { method: "DELETE" })));
+}
+
+function addWatch() {
+  if (!lastUrl) return;
+  write("/api/watchlist", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url: lastUrl }) });
+}
+
+async function write(path, opts, retried) {
+  let token = "";
+  try { token = localStorage.getItem("adminToken") || ""; } catch {}
+  opts.headers = { ...(opts.headers || {}), ...(token ? { authorization: `Bearer ${token}` } : {}) };
+  const r = await fetch(path, opts);
+  if (r.status === 401 && !retried) {
+    const t = prompt("Admin token");
+    if (!t) return;
+    try { localStorage.setItem("adminToken", t); } catch {}
+    return write(path, opts, true);
+  }
+  if (!r.ok) alert((await r.json()).error);
+  loadWatch();
+}
+
+loadWatch();
+</script>
+</body>
+</html>
