@@ -1,0 +1,36 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "edge-seo-toolkit",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-01",
+
+  // Front end: dashboard served from Cloudflare's CDN
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+
+  // Back end: run near the sites we fetch, not the visitor
+  "placement": { "mode": "smart" },
+
+  // Serverless AI inference
+  "ai": { "binding": "AI" },
+
+  // Audit history + watchlist storage
+  // Create with: npx wrangler kv namespace create AUDITS  — then paste the id here
+  "kv_namespaces": [
+    { "binding": "AUDITS", "id": "REPLACE_WITH_KV_NAMESPACE_ID" }
+  ],
+
+  // Background job: re-audit watched URLs every morning (UTC)
+  "triggers": { "crons": ["0 11 * * *"] },
+
+  // Observability: logs + metrics in the Cloudflare dashboard
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+
+  "vars": {
+    "AI_MODEL": "@cf/meta/llama-3.1-8b-instruct",
+    "MAX_WATCHLIST": "25"
+  }
+}
